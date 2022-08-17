@@ -13,7 +13,7 @@ const int ledPin = 16;  // 16 corresponds to GPIO16
 
 WebServer server(80);
 
-String getMIME(const String& filename)
+String getMIME(const String filename)
 {
   if (filename.endsWith(".html"))
     return "text/html";
@@ -30,7 +30,7 @@ String getMIME(const String& filename)
   return "text/plain";
 }
 
-bool handlePage(const String& filePath) {
+bool handlePage(const String filePath) {
   String contentType = getMIME(filePath);
   if (SPIFFS.exists(filePath)) {
     File file = SPIFFS.open(filePath, "r");
@@ -45,12 +45,14 @@ bool handlePage(const String& filePath) {
   }
 }
 
-void initWiFi(WebServer& server) {
-  File configFile = SPIFFS.open("/config/wifi.json", "r");
+void initWiFi() {
+  File configFile = SPIFFS.open("/config/wifi.json", FILE_READ);
   const char *ssid = "", *pass = "";
   if (configFile) {
     StaticJsonDocument<200> doc;
-    DeserializationError error = deserializeJson(doc, configFile);
+    String buf = configFile.readString();
+    Serial.println(buf);
+    DeserializationError error = deserializeJson(doc, buf);
     if (error) {
       Serial.print("Failed to read a config file: ");
       Serial.println(error.c_str());
@@ -62,17 +64,15 @@ void initWiFi(WebServer& server) {
       unsigned long startTime = millis();
       while (WiFi.status() != WL_CONNECTED) {
         delay(500);
-        Serial.print(".");
         if ((unsigned long)(millis() - startTime) >= 7000) {
-          Serial.println("Error while try to connect to WI-FI!");
+          Serial.println("\nError while try to connect to WI-FI!");
         }
       }
     }
   } else {
     Serial.println("Config file was not found!");
   }
-  Serial.println("Starting the webserver on " + WiFi.localIP());
-  server.begin();
+  Serial.println("\nStarting webserver on " + WiFi.localIP().toString());
 }
 
 void setLED(char mark, int level) {
@@ -94,18 +94,27 @@ void setup() {
   Serial.begin(115200);
 
   SPIFFS.begin();
-  initWiFi(server);
+  initWiFi();
 
   server.on("/", []() {
-      handlePage("/templates/mainpage.html");
+      handlePage("/templates/index.html");
+  });
+
+  server.onNotFound([]() {
+      if (!handlePage(server.uri()))
+        server.send(404, "text/plain", "404: Not Found");
     });
+
+   server.begin();
 }
  
 void loop() {
+
+  server.handleClient();
   // increase the LED brightness
   brightness += brightStep;
 
-  Serial.printf("setting brightness to: %d\n", brightness);
+  // Serial.printf("setting brightness to: %d\n", brightness);
 
   analogWrite(LED_BUILTIN, brightness);
   setLED('R', brightness);

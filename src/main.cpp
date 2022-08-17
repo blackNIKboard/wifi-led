@@ -4,12 +4,9 @@
 #include <WebServer.h>
 #include <WiFi.h>
 
-int leds [] = { 16, 22, 19 }; // R-G-B
-
-int brightness = 0;
-int brightStep = 1;
-
-const int ledPin = 16;  // 16 corresponds to GPIO16
+#define RED 16
+#define GREEN 22
+#define BLUE 19
 
 WebServer server(80);
 
@@ -76,18 +73,24 @@ void initWiFi() {
 }
 
 void setLED(char mark, int level) {
-  int selectedPin = 0;
+  int selectedPin = RED;
   switch (mark) {
   case 'G':
-    selectedPin = leds[1];
+    selectedPin = GREEN;
     break;
   case 'B':
-    selectedPin = leds[2];
+    selectedPin = BLUE;
     break;
   default:
     break;
   }
   analogWrite(selectedPin, level);   
+}
+
+void setColor(int red, int green, int blue) {
+  analogWrite(RED, red);
+  analogWrite(GREEN, green);
+  analogWrite(BLUE, blue);
 }
 
 void setup() {
@@ -96,8 +99,23 @@ void setup() {
   SPIFFS.begin();
   initWiFi();
 
-  server.on("/", []() {
-      handlePage("/templates/index.html");
+  server.on("/api/color", HTTP_GET, []() {
+    server.send(200, "text/plain", "OK");
+  });
+
+  server.on("/api/change", HTTP_POST, []() {
+    StaticJsonDocument<200> doc;
+    String data = server.arg("color");
+    DeserializationError error = deserializeJson(doc, data);
+    if (error) {
+      Serial.println("Failed to deseriakize data for /api/change.");
+    }
+    else {
+      setColor(static_cast<int>(doc["red"]),
+               static_cast<int>(doc["green"]),
+               static_cast<int>(doc["blue"]));
+      server.send(201, "text/plain", "OK");
+    }
   });
 
   server.onNotFound([]() {
@@ -109,21 +127,5 @@ void setup() {
 }
  
 void loop() {
-
   server.handleClient();
-  // increase the LED brightness
-  brightness += brightStep;
-
-  // Serial.printf("setting brightness to: %d\n", brightness);
-
-  analogWrite(LED_BUILTIN, brightness);
-  setLED('R', brightness);
-  // analogWrite(16, 255);
-
-
-  if ( brightness <= 0 || brightness >= 255 ) {
-    brightStep = -brightStep;
-  }
-  
-  delay(10);
 }
